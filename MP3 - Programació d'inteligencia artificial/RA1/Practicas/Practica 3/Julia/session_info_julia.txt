@@ -1,0 +1,9 @@
+Julia version: 1.13.4
+Status `C:\Users\GabrielHerradorÁlvar\.julia\environments\v1.13\Project.toml`
+  [a93c6f00] DataFrames v1.8.3
+  [7073ff75] IJulia v1.34.4
+  [add582a8] MLJ v0.23.3
+  [91a5bcdd] Plots v1.41.8
+  [ce6b1742] RDatasets v0.8.2
+  [2913bbd2] StatsBase v0.34.14
+  [9a3f8284] Random v1.11.0

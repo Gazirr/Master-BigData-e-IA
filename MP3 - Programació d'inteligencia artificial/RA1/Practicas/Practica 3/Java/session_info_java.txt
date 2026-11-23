@@ -1,0 +1,7 @@
+Java version: 21.0.13
+Java vendor: Eclipse Adoptium
+OS: Windows 11 10.0
+Seed: 42
+Split: 80/20 (stratified)
+Scaler: Z-score fit on train only
+Model: KNN (K=5, Euclidean distance)

@@ -1,0 +1,138 @@
+# ==============================================================================
+# 1. Entorno, instalación y carga de paquetes
+# Comprobamos e instalamos si hace falta los paquetes necesarios, cargamos las
+# librerías, mostramos las versiones de R y de cada paquete y guardamos la
+# información de sesión en session_info.txt para asegurar la reproducibilidad.
+# ==============================================================================
+
+lib_usuario <- Sys.getenv("R_LIBS_USER")
+if (!dir.exists(lib_usuario)) {
+  dir.create(lib_usuario, recursive = TRUE)
+}
+.libPaths(c(lib_usuario, .libPaths()))
+
+paquetes <- c("class", "ggplot2", "dplyr", "rsample")
+faltantes <- paquetes[!paquetes %in% installed.packages()[, "Package"]]
+if (length(faltantes) > 0) {
+  install.packages(faltantes, lib = lib_usuario, repos = "https://cloud.r-project.org")
+}
+
+t_inicio <- proc.time()[["elapsed"]]
+
+library(class)
+library(ggplot2)
+library(dplyr)
+library(rsample)
+
+cat("R version:", R.version.string, "\n")
+cat("class:", as.character(packageVersion("class")),
+    "| ggplot2:", as.character(packageVersion("ggplot2")),
+    "| dplyr:", as.character(packageVersion("dplyr")),
+    "| rsample:", as.character(packageVersion("rsample")), "\n")
+
+writeLines(capture.output(sessionInfo()), "session_info.txt")
+
+# ==============================================================================
+# 2. Carga del dataset Iris, estructura de datos y factores
+# Cargamos el dataset 'iris' incluido en R, comprobamos su estructura y clase
+# (data.frame) y observamos cómo R representa la variable objetivo categórica
+# mediante un 'factor' con sus niveles (levels) y distribución por clase.
+# ==============================================================================
+
+data("iris")
+
+cat("Dimensiones (filas, columnas):", nrow(iris), ncol(iris), "\n")
+cat("Clase del objeto:", paste(class(iris), collapse = ", "), "\n\n")
+
+print(head(iris))
+cat("\nEstructura del dataset:\n")
+str(iris)
+
+cat("\nClase de la columna Species:", class(iris$Species), "\n")
+cat("Niveles del factor Species:", paste(levels(iris$Species), collapse = ", "), "\n")
+cat("Distribución inicial de clases:\n")
+print(table(iris$Species))
+
+# ==============================================================================
+# 3. Partición estratificada (80/20, semilla 42) y estandarización
+# Dividimos el dataset en 80% entrenamiento y 20% prueba de forma estratificada
+# por 'Species' con semilla 42, y estandarizamos las 4 variables numéricas
+# usando la media y desviación típica de train para evitar fuga de datos.
+# ==============================================================================
+
+set.seed(42)
+split_iris <- initial_split(iris, prop = 0.80, strata = Species)
+
+train_data <- training(split_iris)
+test_data  <- testing(split_iris)
+
+vars_num <- c("Sepal.Length", "Sepal.Width", "Petal.Length", "Petal.Width")
+
+X_train_raw <- as.matrix(train_data[, vars_num])
+X_test_raw  <- as.matrix(test_data[, vars_num])
+
+medias_train <- attr(scale(X_train_raw), "scaled:center")
+desv_train   <- attr(scale(X_train_raw), "scaled:scale")
+
+X_train_scaled <- scale(X_train_raw, center = medias_train, scale = desv_train)
+X_test_scaled  <- scale(X_test_raw,  center = medias_train, scale = desv_train)
+
+y_train <- train_data$Species
+y_test  <- test_data$Species
+
+cat("Filas en train:", nrow(train_data), "| Filas en test:", nrow(test_data), "\n")
+cat("Distribución en train:\n")
+print(table(y_train))
+cat("Distribución en test:\n")
+print(table(y_test))
+
+# ==============================================================================
+# 4. Entrenamiento KNN (k = 5), matriz de confusión y accuracy
+# Entrenamos y predecimos con class::knn usando k = 5 sobre los datos
+# escalados, y evaluamos el rendimiento con la matriz de confusión y accuracy.
+# ==============================================================================
+
+set.seed(42)
+k_vecinos <- 5
+
+pred_test <- knn(
+  train = X_train_scaled,
+  test  = X_test_scaled,
+  cl    = y_train,
+  k     = k_vecinos
+)
+
+matriz_confusion <- table(Predicho = pred_test, Real = y_test)
+accuracy_test    <- sum(diag(matriz_confusion)) / sum(matriz_confusion)
+errores_test     <- sum(pred_test != y_test)
+tiempo_total     <- proc.time()[["elapsed"]] - t_inicio
+
+cat("\nMatriz de confusión (k =", k_vecinos, "):\n")
+print(matriz_confusion)
+cat(sprintf("\nAccuracy en test: %.4f (%.2f%%)\n", accuracy_test, accuracy_test * 100))
+cat("Muestras mal clasificadas en test:", errores_test, "de", length(y_test), "\n")
+cat(sprintf("Tiempo total de ejecución: %.3f s\n", tiempo_total))
+
+# ==============================================================================
+# 5. Visualización de resultados y guardado de gráfica
+# Generamos un gráfico de la matriz de confusión con ggplot2 y lo exportamos
+# a PNG para adjuntarlo en la documentación comparativa de la práctica.
+# ==============================================================================
+
+df_cm <- as.data.frame(matriz_confusion)
+
+grafico_cm <- ggplot(df_cm, aes(x = Real, y = Predicho, fill = Freq)) +
+  geom_tile(color = "white", linewidth = 1) +
+  geom_text(aes(label = Freq), size = 6, fontface = "bold") +
+  scale_fill_gradient(low = "#EBF3FA", high = "#1F618D") +
+  labs(
+    title = sprintf("Matriz de Confusión KNN en R (k = %d | Accuracy: %.2f%%)",
+                    k_vecinos, accuracy_test * 100),
+    x = "Clase Real",
+    y = "Clase Predicha",
+    fill = "Muestras"
+  ) +
+  theme_minimal(base_size = 13)
+
+ggsave("matriz_confusion_r.png", plot = grafico_cm, width = 6.5, height = 5, dpi = 300)
+cat("Gráfico guardado como matriz_confusion_r.png\n")
